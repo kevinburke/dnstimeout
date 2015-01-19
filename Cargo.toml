@@ -1,0 +1,5 @@
+[package]
+
+name = "dnstimeout"
+version = "0.0.1"
+authors = [ "Kevin Burke <kev@inburke.com>" ]
