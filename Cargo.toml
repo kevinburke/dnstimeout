@@ -3,3 +3,5 @@
 name = "dnstimeout"
 version = "0.0.1"
 authors = [ "Kevin Burke <kev@inburke.com>" ]
+description = "Do DNS lookups with a timeout, instead of relying on /etc/resolv.conf."
+license = "MIT"
