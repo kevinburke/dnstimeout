@@ -1,33 +1,32 @@
+//#![feature(lookup_host)]
+
 use std::io;
-use std::io::net::addrinfo;
-use std::io::net::ip;
-use std::io::timer;
+use std::net;
+use std::thread;
 use std::sync::mpsc;
 use std::sync::mpsc::channel;
-use std::thread;
 use std::time;
 
-pub fn lookup(host: String, timeout_duration: time::Duration) -> io::IoResult<Vec<ip::IpAddr>> {
-    let (tx, rx):(mpsc::Sender<io::IoResult<Vec<ip::IpAddr>>>, mpsc::Receiver<io::IoResult<Vec<ip::IpAddr>>>) = channel();
-    let mut timer = timer::Timer::new().unwrap();
-    let timeout = timer.oneshot(timeout_duration);
-
-    let detail = format!("Failed to resolve {} after {} milliseconds", 
-                         host, timeout_duration.num_milliseconds());
-    thread::Thread::spawn(move|| {
+pub fn lookup(host: String, timeout_duration: time::Duration) -> io::Result<net::LookupHost> {
+    let (tx, rx):(mpsc::Sender<io::Result<net::LookupHost>>, mpsc::Receiver<io::Result<net::LookupHost>>) = channel();
+    let (tx2, rx2) = mpsc::channel();
+    let nanos = timeout_duration.subsec_nanos() as u64;
+    let ms = (1000*1000*1000 * timeout_duration.as_secs() + nanos)/(1000 * 1000);
+    let detail = format!("Failed to resolve {} after {} milliseconds", host, ms);
+    thread::spawn(move|| {
         // Reading the recverror docs, I'm not sure how this can fail.
-        tx.send(addrinfo::get_host_addresses(host.as_slice()));
+        tx.send(net::lookup_host(host.as_str())).unwrap();
+    });
+    thread::spawn(move|| {
+        thread::sleep(timeout_duration);
+        tx2.send(()).unwrap();
     });
 
     loop {
         select! {
             val = rx.recv() => { return val.unwrap() },
-            _ = timeout.recv() => {
-                let e = io::IoError{
-                    kind: io::IoErrorKind::TimedOut,
-                    desc: "DNS lookup timed out",
-                    detail: Some(detail)
-                };
+            _ = rx2.recv() => {
+                let e = io::Error::new(io::ErrorKind::TimedOut, detail);
                 return Err(e)
             }
         }
